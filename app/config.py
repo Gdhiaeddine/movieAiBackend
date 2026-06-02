@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Optional
 
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -51,3 +52,6 @@ POSTER_CACHE_PATH: Path = Path(
 ).expanduser()
 POSTER_FETCH_TIMEOUT: float = float(os.getenv("POSTER_FETCH_TIMEOUT", "5.0"))
 POSTER_FETCH_CONCURRENCY: int = int(os.getenv("POSTER_FETCH_CONCURRENCY", "8"))
+
+MODEL_DOWNLOAD_URL: Optional[str] = os.getenv("MODEL_DOWNLOAD_URL") or None
+MODEL_DOWNLOAD_SHA256: Optional[str] = os.getenv("MODEL_DOWNLOAD_SHA256") or None

@@ -1,14 +1,26 @@
 from __future__ import annotations
 
+import hashlib
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional
 
+import httpx
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import CORS_ALLOW_ALL, CORS_ORIGINS, DEFAULT_LIMIT, MAX_LIMIT
+from .config import (
+    CORS_ALLOW_ALL,
+    CORS_ORIGINS,
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
+    MODEL_DOWNLOAD_SHA256,
+    MODEL_DOWNLOAD_URL,
+    MODEL_PATH,
+)
 from .poster_resolver import (
     enrich_movie,
     enrich_recommendation_response,
@@ -39,6 +51,7 @@ _STARTED_AT = time.time()
 async def lifespan(app: FastAPI):
     log.info("Starting up — loading recommender model...")
     try:
+        await _ensure_model_on_disk()
         recommender.load()
     except Exception as exc:
         log.exception("Failed to load model: %s", exc)
@@ -46,6 +59,60 @@ async def lifespan(app: FastAPI):
     yield
     poster_resolver.save()
     log.info("Shutting down.")
+
+
+async def _ensure_model_on_disk() -> None:
+    """If MODEL_DOWNLOAD_URL is set and the pickle is missing, fetch it.
+
+    Lets us deploy to hosts that don't ship the 42 MB .pkl in the repo
+    (e.g. Render free tier, Fly.io). Verify SHA-256 if provided.
+    """
+    if MODEL_PATH.is_file():
+        return
+    if not MODEL_DOWNLOAD_URL:
+        return
+    log.info(
+        "Model missing at %s — downloading from %s",
+        MODEL_PATH, MODEL_DOWNLOAD_URL,
+    )
+    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = MODEL_PATH.with_suffix(MODEL_PATH.suffix + ".part")
+    hasher = hashlib.sha256() if MODEL_DOWNLOAD_SHA256 else None
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            follow_redirects=True,
+        ) as client:
+            async with client.stream("GET", MODEL_DOWNLOAD_URL) as resp:
+                resp.raise_for_status()
+                total = int(resp.headers.get("content-length") or 0)
+                written = 0
+                with open(tmp, "wb") as f:
+                    async for chunk in resp.aiter_bytes(chunk_size=1024 * 1024):
+                        f.write(chunk)
+                        written += len(chunk)
+                        if hasher is not None:
+                            hasher.update(chunk)
+                        if total:
+                            pct = 100 * written / total
+                            log.info(
+                                "  %5.1f%%  %.2f / %.2f MB",
+                                pct, written / 1e6, total / 1e6,
+                            )
+        if hasher is not None:
+            digest = hasher.hexdigest()
+            if digest.lower() != MODEL_DOWNLOAD_SHA256.lower():
+                tmp.unlink(missing_ok=True)
+                raise RuntimeError(
+                    f"Model SHA-256 mismatch "
+                    f"(expected {MODEL_DOWNLOAD_SHA256}, got {digest})"
+                )
+            log.info("Model SHA-256 verified: %s", digest)
+        tmp.replace(MODEL_PATH)
+        log.info("Model saved to %s (%d bytes)", MODEL_PATH, MODEL_PATH.stat().st_size)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 app = FastAPI(
@@ -76,6 +143,11 @@ def root() -> dict:
         "health": "/api/health",
         "ping": "/api/ping",
     }
+
+
+@app.head("/", include_in_schema=False)
+def root_head() -> Response:
+    return Response(status_code=200)
 
 
 @app.get("/api/ping", response_model=PingResponse, tags=["meta"])

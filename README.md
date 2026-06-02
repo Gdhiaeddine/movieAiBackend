@@ -44,6 +44,60 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
+## Deploying to Render / Fly.io / Heroku / Vercel
+
+The pickled model is **42 MB and gitignored**, so platforms that build
+from a git repo (Render free tier, Heroku, Vercel, Fly.io without a
+volume) won't ship it. Two options:
+
+### Option A — Auto-download on startup (recommended)
+
+1. Upload `movies_and_tfidf.pkl` somewhere public. Free options:
+   - **GitHub Releases** — attach the file to a release, copy the URL
+   - **Cloudflare R2** — free egress up to 10 GB/month
+   - **S3** — pay-as-you-go
+
+2. Compute the SHA-256 once locally:
+   ```powershell
+   Get-FileHash backend\movies_and_tfidf.pkl -Algorithm SHA256
+   ```
+
+3. In your host's dashboard, set environment variables:
+   ```
+   MODEL_DOWNLOAD_URL=https://github.com/<you>/<repo>/releases/download/v1/movies_and_tfidf.pkl
+   MODEL_DOWNLOAD_SHA256=<the hash from step 2>
+   ```
+
+4. The backend will fetch the pickle on first request, verify the hash,
+   and persist it to the resolved `MODEL_PATH`. On subsequent restarts
+   the file is already there and the download is skipped.
+
+Health-check path on Render: set it to **`/api/ping`** (or `/`). The
+backend supports both `GET` and `HEAD` on those paths.
+
+### Option B — Docker image with the model baked in
+
+Add a line to your `Dockerfile`:
+```dockerfile
+COPY movies_and_tfidf.pkl /app/movies_and_tfidf.pkl
+```
+Image grows by ~42 MB; no network dependency at startup. Use this if
+you're deploying via a container registry and want a single self-
+contained artifact.
+
+### Manual download (one-off)
+
+```powershell
+# download the resolved model path
+.\.venv\Scripts\python.exe download_model.py --url https://example.com/movies_and_tfidf.pkl
+
+# with integrity check
+.\.venv\Scripts\python.exe download_model.py --url https://example.com/movies_and_tfidf.pkl --sha256 <hash>
+
+# force re-download
+.\.venv\Scripts\python.exe download_model.py --url https://example.com/movies_and_tfidf.pkl --force
+```
+
 ## Monitoring endpoints
 
 | Method | Path | Purpose |
@@ -161,6 +215,14 @@ Copy `.env.example` to `.env` (or export in your shell) to override
 defaults:
 
 - `MODEL_PATH` — absolute path to the `.pkl` file.
+- `MODEL_DOWNLOAD_URL` — public URL of the `.pkl` to fetch on startup if
+  the file is missing on disk. Use this when deploying to hosts that
+  don't ship the 42 MB pickle with the repo (Render free tier, Fly.io,
+  Heroku, Vercel, …). Combine with `MODEL_DOWNLOAD_SHA256` to verify
+  integrity. You can host the file on GitHub Releases, Cloudflare R2,
+  S3, or any HTTPS-accessible URL.
+- `MODEL_DOWNLOAD_SHA256` — expected SHA-256 of the downloaded pickle.
+  Recommended for production.
 - `CORS_ORIGINS` — comma-separated list of allowed origins (default `*`).
   Setting it to `*` opens the API to any origin (e.g. for monitoring tools
   hitting from different IPs). For a production frontend, prefer an
