@@ -46,6 +46,36 @@ uvicorn app.main:app --reload --port 8000
 
 ## Deploying to Render / Fly.io / Heroku / Vercel
 
+### Render (one-click)
+
+`site/render.yaml` is a ready-to-use blueprint. From the Render
+dashboard:
+
+1. **New → Blueprint** → point at your repo root
+2. Render reads `render.yaml` and creates the `movieai-api` web service
+3. After it provisions, set the two env vars in the dashboard
+   (Render can't auto-fill secrets):
+   ```
+   MODEL_DOWNLOAD_URL=https://<your-host>/movies_and_tfidf.pkl
+   MODEL_DOWNLOAD_SHA256=9f69453ebc211ee3872365c3e46cc354b185d397d17adcbcb3968d505759efea
+   ```
+4. Trigger a deploy (or push a commit)
+
+**Critical**: the start command **must** bind `0.0.0.0` and use `$PORT`
+(do **not** hard-code `127.0.0.1` or `8000`). The `render.yaml`
+already does this; if you wire things up by hand in the dashboard,
+the start command is:
+
+```
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+A `Procfile` is also provided as a fallback for Heroku-style
+platforms that read it automatically.
+
+Health check path: set to **`/api/ping`** (or `/`). Both support
+GET and HEAD.
+
 The pickled model is **42 MB and gitignored**, so platforms that build
 from a git repo (Render free tier, Heroku, Vercel, Fly.io without a
 volume) won't ship it. Two options:
