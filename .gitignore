@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+*.pkl
+poster_cache.json
+.ipynb_checkpoints/
+.pytest_cache/
