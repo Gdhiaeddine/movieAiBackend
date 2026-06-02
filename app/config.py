@@ -32,12 +32,10 @@ MODEL_PATH: Path = _resolve_model_path()
 
 CORS_ORIGINS: list[str] = [
     o.strip()
-    for o in os.getenv(
-        "CORS_ORIGINS",
-        "http://localhost:3000,http://127.0.0.1:3000",
-    ).split(",")
+    for o in os.getenv("CORS_ORIGINS", "*").split(",")
     if o.strip()
 ]
+CORS_ALLOW_ALL: bool = "*" in CORS_ORIGINS
 
 DEFAULT_LIMIT: int = int(os.getenv("DEFAULT_LIMIT", "10"))
 MAX_LIMIT: int = int(os.getenv("MAX_LIMIT", "50"))

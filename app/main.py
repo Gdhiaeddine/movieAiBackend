@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import CORS_ORIGINS, DEFAULT_LIMIT, MAX_LIMIT
+from .config import CORS_ALLOW_ALL, CORS_ORIGINS, DEFAULT_LIMIT, MAX_LIMIT
 from .poster_resolver import (
     enrich_movie,
     enrich_recommendation_response,
@@ -60,8 +60,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"] if CORS_ALLOW_ALL else CORS_ORIGINS,
+    allow_credentials=not CORS_ALLOW_ALL,
     allow_methods=["*"],
     allow_headers=["*"],
 )

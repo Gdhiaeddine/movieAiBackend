@@ -161,8 +161,10 @@ Copy `.env.example` to `.env` (or export in your shell) to override
 defaults:
 
 - `MODEL_PATH` — absolute path to the `.pkl` file.
-- `CORS_ORIGINS` — comma-separated list of allowed origins (default
-  `http://localhost:3000,http://127.0.0.1:3000`).
+- `CORS_ORIGINS` — comma-separated list of allowed origins (default `*`).
+  Setting it to `*` opens the API to any origin (e.g. for monitoring tools
+  hitting from different IPs). For a production frontend, prefer an
+  explicit list like `http://localhost:3000,https://your-domain.com`.
 - `DEFAULT_LIMIT`, `MAX_LIMIT` — pagination defaults for recommendations.
 - `ENABLE_POSTER_FETCH` — `true` (default) enriches responses with IMDb
   poster URLs. Set `false` to disable.
